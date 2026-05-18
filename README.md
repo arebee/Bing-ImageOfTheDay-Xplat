@@ -17,6 +17,7 @@ metadata in the feed. The images don't include them, strangely.
     1. ExifTool is available for MacOS and Windows, but not Linux.
     1. This script uses the information in the JSON endpoint source.
 1. Renamed script and paramaters to be more vernacular PowerShell.
+1. Updated to export functions using a Module manifest.
 
 ### Added Parameters
 
