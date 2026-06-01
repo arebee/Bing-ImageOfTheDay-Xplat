@@ -95,9 +95,14 @@ function Update-BingImageOfTheDayMetadata {
         }
         else {
             Write-Verbose "No match found in Alt feed for Bing item, adding item to metadata collection"
-            $null = $CombinedImageMetadata.Add($item)
             $bingUrl = 'https://www.bing.com'
-            Write-Verbose ([$bingUrl, $item.url])
+            $item.url = -join ($bingUrl, $item.url)
+            $item.copyrightlink = -join ($bingUrl, $item.copyrightlink)
+
+            $newItem = $CombinedImageMetadata.Add($item)
+
+            Write-Verbose $(-join ("Url: ", $CombinedImageMetadata[$newItem].url))
+            Write-Verbose $(-join ("Copyrightlink: ", $CombinedImageMetadata[$newItem].copyrightlink))
         }
     }
     
@@ -137,15 +142,27 @@ function Update-BingImageOfTheDayMetadata {
         Write-Verbose "Caption: $caption"
         Write-Verbose "Description: $description"
         Write-Verbose "Copyright: $copyright"
+        Write-Verbose "Copyrightlink: $($imageMetadata.copyrightlink)"
+        Write-Verbose "Url: $($imageMetadata.url)"
         
         if ($WhatIfPreference) {
-            "WhatIf: Updating $($file.FullName) to $($file.BaseName + "_meta" + $file.Extension)"
+            Write-Verbose "WhatIf: Updating $($file.FullName) to $($file.BaseName + "_meta" + $file.Extension)"
             continue    
         }
+        
         Write-Verbose "Updating $($file.FullName) to $($file.BaseName + "_meta" + $file.Extension)"
         
         # Update the file with metadata and then rename the file
-        $null = exiftool -overwrite_original -Title="$title" -iptc:ObjectName="$caption" -iptc:Caption-Abstract="$caption" -Description="$description" -Copyright="$copyright" -CreatorWorkURL="$($imageMetadata.copyrightlink)" $($file.FullName)
+        $null = exiftool -overwrite_original `
+                         -Description="$description" `
+                         -ImageTitle="$title" `
+                         -Subject="$caption" `
+                         -iptc:ObjectName="$caption" `
+                         -iptc:Caption-Abstract="$caption" `
+                         -Copyright="$copyright" `
+                         -CreatorWorkURL="$($imageMetadata.copyrightlink)" `
+                         -BaseURL="$($imageMetadata.url)" `
+                         $($file.FullName)
         $null = Rename-Item -Path $file.FullName $($file.BaseName + "_meta" + $file.Extension)
         $filesUpdatedCount++
     }
