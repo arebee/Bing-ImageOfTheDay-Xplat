@@ -82,36 +82,47 @@ function Update-BingImageOfTheDayMetadata {
     [System.Collections.ArrayList]$BingMetadata = $(ConvertFrom-Json((Invoke-WebRequest -Uri $Const_Bing_Metadata_URL_1).Content)).Images
     [System.Collections.ArrayList]$BingMetadata += $(ConvertFrom-Json((Invoke-WebRequest -Uri $Const_Bing_Metadata_URL_2).Content)).Images
     
-    Write-Verbose $CombinedImageMetadata.Count
+    Write-Verbose "Combining Bing and Alt metadata"
     foreach ($item in $BingMetadata) {
+        Write-Verbose "Processing Bing item $($item.startdate)"
         $MatchesInCombined = $CombinedImageMetadata.Where({ $_.startdate -eq $item.startdate })
-        foreach ($match in $MatchesInCombined) {
-            Add-Member -Type NoteProperty -Name desc -Value $item.desc -InputObject $match -Force
-            Add-Member -Type NoteProperty -Name caption -Value $item.caption -InputObject $match -Force
-            Add-Member -Type NoteProperty -Name copyrightonly -Value $item.copyrightonly -InputObject $match -Force
+        if (0 -ne $MatchesInCombined.Count) {
+            foreach ($match in $MatchesInCombined) {
+                Add-Member -Type NoteProperty -Name desc -Value $item.desc -InputObject $match -Force
+                Add-Member -Type NoteProperty -Name caption -Value $item.caption -InputObject $match -Force
+                Add-Member -Type NoteProperty -Name copyrightonly -Value $item.copyrightonly -InputObject $match -Force
+            }
+        }
+        else {
+            Write-Verbose "No match found in Alt feed for Bing item, adding item to metadata collection"
+            $null = $CombinedImageMetadata.Add($item)
+            $bingUrl = 'https://www.bing.com'
+            Write-Verbose ([$bingUrl, $item.url])
         }
     }
     
     # Process each file
     foreach ($file in ($filesToProcess | Sort-Object -Descending)) {
-        Write-Verbose "`nProcessing '$($file.FullName)'"
+        Write-Verbose "`n"
+        Write-Verbose "Processing '$($file.FullName)'"
         $existingCopyRight = exiftool -Copyright $($file.FullName)
         if ($null -ne $existingCopyRight) {
             Write-Verbose "$($file.FullName) already has copyright info"
             continue
         }
-        $startDate = $file.BaseName.Replace('-', '').Trim()    
-        $imageMetadata = $CombinedImageMetadata.Where{ $_.startdate -eq $startDate }[0]
+        $fileStartDate = $file.BaseName.Replace('-', '').Trim()    
+        $imageMetadata = $CombinedImageMetadata.Where{ $_.startdate -eq $fileStartDate }[0]
         if (($null -eq $imageMetadata) -or ('' -eq $imageMetadata )) {
             Write-Verbose "No metadata available for $file"
             continue
         }
         
-        if ($imageMetadata.PSObject.Properties.Name -contains 'desc'){
+        if ($imageMetadata.PSObject.Properties.Name -contains 'desc') {
             $description = $imageMetadata.desc
             $copyright = $imageMetadata.copyrightonly
             $caption = $imageMetadata.caption
-        } else {
+        }
+        else {
             Write-Verbose "Transforming copyright info into description and copyright"
             Write-Verbose $($imageMetadata.copyright)
             $splitSourceCopyright = $imageMetadata.copyright.split('(')

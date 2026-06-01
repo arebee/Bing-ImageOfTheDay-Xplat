@@ -211,7 +211,7 @@ function Get-BingImageOfTheDay {
                 Write-Verbose "Test-Path $destination $(Test-Path $destination)"
                 Write-Verbose "Test-Path $destinationWithMetadata $(Test-Path $destinationWithMetadata)"
                 if ($WhatIfPreference -eq $true) {
-                    Write-Output "Downloading image from: $($item.imageurl) to: $destination"
+                    Write-Output "WhatIf: Downloading image from: $($item.imageurl) to: $destination"
                 }
                 else {
                     Write-Verbose "Downloading image from: $($item.imageurl) to: $destination"
