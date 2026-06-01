@@ -207,13 +207,14 @@ function Get-BingImageOfTheDay {
                 
             # Download the enclosure if we haven't done so already
             if (!(Test-Path $destination) -and !(Test-Path $destinationWithMetadata)) {
+                Write-Verbose $('image: ' + $item.startdate + ' -- ' + $item.title)
                 Write-Verbose "Test-Path $destination $(Test-Path $destination)"
                 Write-Verbose "Test-Path $destinationWithMetadata $(Test-Path $destinationWithMetadata)"
                 if ($WhatIfPreference -eq $true) {
-                    Write-Output "Downloading image from: $imageurl to: $destination"
+                    Write-Output "Downloading image from: $($item.imageurl) to: $destination"
                 }
                 else {
-                    Write-Verbose "Downloading image from: $imageurl to: $destination"
+                    Write-Verbose "Downloading image from: $($item.imageurl) to: $destination"
                     $client.DownloadFile($item.imageurl, $destination)
                 }
             }
