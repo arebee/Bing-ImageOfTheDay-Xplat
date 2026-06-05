@@ -84,7 +84,7 @@ function Update-BingImageOfTheDayMetadata {
     
     Write-Verbose "Combining Bing and Alt metadata"
     foreach ($item in $BingMetadata) {
-        Write-Verbose "Processing Bing item $($item.startdate)"
+        # Write-Verbose "Processing Bing item $($item.startdate)"
         $MatchesInCombined = $CombinedImageMetadata.Where({ $_.startdate -eq $item.startdate })
         if (0 -ne $MatchesInCombined.Count) {
             foreach ($match in $MatchesInCombined) {
@@ -94,7 +94,7 @@ function Update-BingImageOfTheDayMetadata {
             }
         }
         else {
-            Write-Verbose "No match found in Alt feed for Bing item, adding item to metadata collection"
+            Write-Verbose "No match found in Alt feed for Bing item $($item.startdate), adding item to metadata collection"
             $bingUrl = 'https://www.bing.com'
             $item.url = -join ($bingUrl, $item.url)
             $item.copyrightlink = -join ($bingUrl, $item.copyrightlink)
