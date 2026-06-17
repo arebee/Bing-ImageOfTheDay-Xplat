@@ -10,7 +10,8 @@
     Bing "Image of the Day" files are identified as matching the ????-??-??.jpg pattern in the Path
 
     .DESCRIPTION
-    Fetch the Bing wallpaper image of the day. Can download previous day images as well. Skips downloading existing wallpapers.
+    Fetch the Bing wallpaper image of the day metadata. It examines the files in the wallpaper path provided and then 
+    applies metadata to them using the enhanced feed and core Bing feed.
     Requires EXIFTOOL in path. e.g. 'brew install exiftool' or 'winget install --id=OliverBetz.ExifTool'
 
     .PARAMETER Path
@@ -21,8 +22,8 @@
     None. You can't pipe objects to Update-BingImageOfTheDayMetadata.
 
     .OUTPUTS
-    Writes data to images that match in specified path.
-
+    Writes a collection of objects, each of which contains the title and filename of a modified image.
+    
     .LINK
     Git Repo: https://github.com/arebee/Bing-wallpapers-x-plat
 #>
