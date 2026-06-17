@@ -105,7 +105,8 @@ function Update-BingImageOfTheDayMetadata {
             Write-Verbose $(-join ("Copyrightlink: ", $CombinedImageMetadata[$newItem].copyrightlink))
         }
     }
-    
+    $processedFiles = New-Object System.Collections.ArrayList
+
     # Process each file
     foreach ($file in ($filesToProcess | Sort-Object -Descending)) {
         Write-Verbose "`n"
@@ -157,7 +158,7 @@ function Update-BingImageOfTheDayMetadata {
                          -Description="$description" `
                          -ImageTitle="$title" `
                          -Subject="$caption" `
-                         -iptc:ObjectName="$caption" `
+                         -iptc:ObjectName="$title" `
                          -iptc:Caption-Abstract="$caption" `
                          -Copyright="$copyright" `
                          -CreatorWorkURL="$($imageMetadata.copyrightlink)" `
@@ -165,9 +166,16 @@ function Update-BingImageOfTheDayMetadata {
                          $($file.FullName)
         $null = Rename-Item -Path $file.FullName $($file.BaseName + "_meta" + $file.Extension)
         $filesUpdatedCount++
+
+        $null = $processedFiles.Add([PSCustomObject]@{
+            Caption = $caption
+            FileName = $($file.BaseName + "_meta" + $file.Extension)
+        })
     }
     Write-Verbose ""
     Write-Verbose "Summary"
     Write-Verbose "$($filesToProcess.Count) image(s) identified to process"
     Write-Verbose "$($filesUpdatedCount) image(s) updated"
+    
+    $processedFiles
 }
