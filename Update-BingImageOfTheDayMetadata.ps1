@@ -17,6 +17,18 @@
     .PARAMETER Path
     Specify the location of an image, or a path to serch for Bing Images of the Day.
     Default: Wallpaper folder in your Pictures folder.
+
+    .PARAMETER UseAlternateSource
+    Use an alternative, non-official endpoint enumerating Bing wallpaper information. Contains many more image files than the official endpoint.
+    Default: False, use Bing endpoint
+
+    .PARAMETER Locale
+    Specifies the locale of the image to download. By using the value `'auto'`, Bing will attempt to determine an applicable locale based on your IP address.
+    Default value: "auto".
+    
+    .PARAMETER Resolution
+    Specify the size of the image file. Select from the set, or use "auto" to detect.
+    Default is "auto".
     
     .INPUTS
     None. You can't pipe objects to Update-BingImageOfTheDayMetadata.
@@ -32,12 +44,49 @@
 function Update-BingImageOfTheDayMetadata {
     [CmdletBinding(SupportsShouldProcess)]
     Param(
+        # Get the Bing image of this country
+        [ValidateSet(
+            'auto', 'ar-XA', 'bg-BG', 'cs-CZ', 'da-DK', 'de-AT', 'de-CH',
+            'de-DE', 'el-GR', 'en-AU', 'en-CA', 'en-GB', 'en-ID', 'en-IE',
+            'en-IN', 'en-MY', 'en-NZ', 'en-PH', 'en-SG', 'en-US', 'en-XA',
+            'en-ZA', 'es-AR', 'es-CL', 'es-ES', 'es-MX', 'es-US', 'es-XL',
+            'et-EE', 'fi-FI', 'fr-BE', 'fr-CA', 'fr-CH', 'fr-FR', 'he-IL',
+            'hr-HR', 'hu-HU', 'it-IT', 'ja-JP', 'ko-KR', 'lt-LT', 'lv-LV',
+            'nb-NO', 'nl-BE', 'nl-NL', 'pl-PL', 'pt-BR', 'pt-PT', 'ro-RO',
+            'ru-RU', 'sk-SK', 'sl-SL', 'sv-SE', 'th-TH', 'tr-TR', 'uk-UA',
+            'zh-CN', 'zh-HK', 'zh-TW'
+        )][string]$Locale = 'auto',
+        
+        [ValidateSet(
+            'auto', '800x600', '1024x768', '1280x720', '1280x768', '1366x768',
+            '1920x1080', '1920x1200', '720x1280', '768x1024', '768x1280',
+            '768x1366', '1080x1920', 'UHD'
+        )][string]$Resolution = 'auto',
+    
         [string]$Path = $(Join-Path $([Environment]::GetFolderPath("MyPictures")) "Wallpapers")
     )
+    Write-Verbose ''
+    Write-Verbose '===> Executing Update-BingImageOfTheDayMetadata'
+    Write-Verbose ''
     $filesUpdatedCount = 0
+
+    # URI to fetch the image locations from
+    if ($Locale -eq 'auto') {
+        $market = ''
+    }
+    else {
+        $market = "&mkt=$Locale"
+    }
+
+    if ($Resolution -eq 'auto'){
+        $Resolution = Get-Resolution
+    }
+
+    Write-Verbose "Resolution: $Resolution"
+    
     $AltMetadataUri = 'https://api45gabs.azurewebsites.net/api/sample/bingphotos'
-    $Const_Bing_Metadata_URL_1 = "https://www.bing.com/HPImageArchive.aspx?format=js&mkt=$PSCulture&pid=hp&idx=0&n=8"
-    $Const_Bing_Metadata_URL_2 = "https://www.bing.com/HPImageArchive.aspx?format=js&mkt=$PSCulture&pid=hp&idx=8&n=8"
+    $Const_Bing_Metadata_URL_1 = "https://www.bing.com/HPImageArchive.aspx?format=js$market&pid=hp&idx=0&n=8"
+    $Const_Bing_Metadata_URL_2 = "https://www.bing.com/HPImageArchive.aspx?format=js$market&pid=hp&idx=8&n=8"
 
     # Test if EXIFTOOL is available on the path 
     if ($null -eq (get-Command -Name exiftool -ErrorAction Ignore)) {
@@ -73,40 +122,66 @@ function Update-BingImageOfTheDayMetadata {
     Write-Verbose "$($filesToProcess.Count) image(s) to process"
     if ($filesToProcess.Count -eq 0) { return }
 
-    # Fetch the metadata to apply from the Alternative endpoint.
-    Write-Verbose "Getting Alt Metadata"
-    # $MyJsonImages = ConvertFrom-Json -InputObject $(Invoke-WebRequest -UseBasicParsing -Uri $AltMetadataUri).Content
-    [System.Collections.ArrayList]$CombinedImageMetadata = ConvertFrom-Json -InputObject $(Invoke-WebRequest -UseBasicParsing -Uri $AltMetadataUri).Content
+    [System.Collections.ArrayList]$CombinedImageMetadata = [System.Collections.ArrayList]::new()
     
+    # Fetch metadata from the Alt endpoint.
+    if ($UseAlternateSource) {
+        [System.Collections.ArrayList]$AltImageMetadata = [System.Collections.ArrayList]::new()
+        # Fetch the metadata to apply from the Alternative endpoint.
+        Write-Verbose "Try getting Alt Metadata"
+        try {
+            $altMetadata = ConvertFrom-Json -InputObject $(Invoke-WebRequest -Uri $AltMetadataUri -ContentType 'application/json; charset=utf-8').Content
+            $AltImageMetadata.AddRange( $altMetadata )
+        }
+        catch {
+            Write-Error "Error: Alt Metadata failed to load."
+        }    
+    }
+
     # Fetch metadata from the Bing Image of the Day endpoint.
     Write-Verbose "Getting Bing Metadata"
-    [System.Collections.ArrayList]$BingMetadata = $(ConvertFrom-Json((Invoke-WebRequest -Uri $Const_Bing_Metadata_URL_1).Content)).Images
-    [System.Collections.ArrayList]$BingMetadata += $(ConvertFrom-Json((Invoke-WebRequest -Uri $Const_Bing_Metadata_URL_2).Content)).Images
+    [System.Collections.ArrayList]$BingMetadata = [System.Collections.ArrayList]::new()
+    try {
+        $BingMetadata.AddRange($(ConvertFrom-Json((Invoke-WebRequest -Uri $Const_Bing_Metadata_URL_1 -ContentType 'application/json; charset=utf-8').Content)).Images)
+        $BingMetadata.AddRange($(ConvertFrom-Json((Invoke-WebRequest -Uri $Const_Bing_Metadata_URL_2 -ContentType 'application/json; charset=utf-8').Content)).Images)
+    }
+    catch {
+        Write-Error "Error: Bing Metadata failed to load."
+    }
     
-    Write-Verbose "Combining Bing and Alt metadata"
     foreach ($item in $BingMetadata) {
-        # Write-Verbose "Processing Bing item $($item.startdate)"
-        $MatchesInCombined = $CombinedImageMetadata.Where({ $_.startdate -eq $item.startdate })
-        if (0 -ne $MatchesInCombined.Count) {
-            foreach ($match in $MatchesInCombined) {
-                Add-Member -Type NoteProperty -Name desc -Value $item.desc -InputObject $match -Force
-                Add-Member -Type NoteProperty -Name caption -Value $item.caption -InputObject $match -Force
-                Add-Member -Type NoteProperty -Name copyrightonly -Value $item.copyrightonly -InputObject $match -Force
+        # Write-Verbose "Processing item $($item.startdate)"
+        if ($UseAlternateSource) {
+            Write-Verbose "Combining Bing and Alt metadata"
+            $MatchesInCombined = $AltImageMetadata.Where({ $_.startdate -eq $item.startdate })
+            if (0 -ne $MatchesInCombined.Count) {
+                foreach ($match in $MatchesInCombined) {
+                    Add-Member -Name desc -Type NoteProperty -Value $item.desc -InputObject $match -Force
+                    Add-Member -Name caption -Type NoteProperty -Value $item.caption -InputObject $match -Force
+                    Add-Member -Name copyrightonly -Type NoteProperty -Value $item.copyrightonly -InputObject $match -Force
+                }
+                null = $CombinedImageMetadata.AddRange($MatchesInCombined)
+            }
+            else {
+                # Write-Verbose "No Alt feed item for $($item.startdate), using Bing metadata"
+                $bingUrl = 'https://www.bing.com'
+                $item.url = -join ($bingUrl, $item.url.Replace('1920x1080',$Resolution))
+                $item.copyrightlink = -join ($bingUrl, $item.copyrightlink)
+
+                $null = $CombinedImageMetadata.Add($item)
             }
         }
         else {
-            Write-Verbose "No match found in Alt feed for Bing item $($item.startdate), adding item to metadata collection"
+            # Write-Verbose "No Alt feed item for $($item.startdate), using Bing metadata"
             $bingUrl = 'https://www.bing.com'
-            $item.url = -join ($bingUrl, $item.url)
+            $item.url = -join ($bingUrl, $item.url.Replace('1920x1080',$Resolution))
             $item.copyrightlink = -join ($bingUrl, $item.copyrightlink)
 
-            $newItem = $CombinedImageMetadata.Add($item)
-
-            Write-Verbose $(-join ("Url: ", $CombinedImageMetadata[$newItem].url))
-            Write-Verbose $(-join ("Copyrightlink: ", $CombinedImageMetadata[$newItem].copyrightlink))
+            $null = $CombinedImageMetadata.Add($item)
         }
     }
-    $processedFiles = New-Object System.Collections.ArrayList
+    
+    $processedFiles = [System.Collections.ArrayList]::new()
 
     # Process each file
     foreach ($file in ($filesToProcess | Sort-Object -Descending)) {
@@ -156,24 +231,27 @@ function Update-BingImageOfTheDayMetadata {
         
         # Update the file with metadata and then rename the file
         $null = exiftool -overwrite_original `
-                         -Description="$description" `
-                         -ImageTitle="$title" `
-                         -Subject="$caption" `
-                         -iptc:ObjectName="$title" `
-                         -iptc:Caption-Abstract="$caption" `
-                         -Copyright="$copyright" `
-                         -CreatorWorkURL="$($imageMetadata.copyrightlink)" `
-                         -BaseURL="$($imageMetadata.url)" `
-                         $($file.FullName)
+            -Description="$description" `
+            -ImageTitle="$title" `
+            -Subject="$caption" `
+            -iptc:ObjectName="$title" `
+            -iptc:Caption-Abstract="$caption" `
+            -xmp:dc:source="$($imageMetadata.url)" `
+            -Copyright="$copyright" `
+            -CreatorWorkURL="$($imageMetadata.copyrightlink)" `
+            -BaseURL="$($imageMetadata.url)" `
+            -charset UTF8 -charset iptc=utf8 -charset exif=utf8 `
+        $($file.FullName)
         $metafile = Rename-Item -PassThru -Path $file.FullName $($file.BaseName + "_meta" + $file.Extension)
         $filesUpdatedCount++
 
         $null = $processedFiles.Add([PSCustomObject]@{
-            Name = $metafile.Name
-            FullName = $metafile.FullName
-            Caption = $caption
-        })
+                Name     = $metafile.Name
+                FullName = $metafile.FullName
+                Caption  = $caption
+            })
     }
+
     Write-Verbose ""
     Write-Verbose "Summary"
     Write-Verbose "$($filesToProcess.Count) image(s) identified to process"

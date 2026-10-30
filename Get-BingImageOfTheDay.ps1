@@ -31,7 +31,7 @@
     Specify the location where wallpapers will be downloaded.
     Default: Wallpaper folder in your Pictures folder.
     
-    .PARAMETER FromAlternateSource
+    .PARAMETER UseAlternateSource
     Use an alternative, non-official endpoint enumerating Bing wallpaper information. Contains many more image files than the official endpoint.
     Default: False, use Bing endpoint
     
@@ -79,10 +79,13 @@ function Get-BingImageOfTheDay {
         [string]$Path = $(Join-Path $([Environment]::GetFolderPath("MyPictures")) "Wallpapers"),
 
         # Get wallpaper information from an unofficial alternative API with > 500 images
-        [switch]$FromAlternateSource
+        [switch]$UseAlternateSource
     )
 
     process {
+        Write-Verbose ''
+        Write-Verbose '===> Executing Get-BingImageOfTheDay'
+        Write-Verbose ''
         # Contstants
         $Const_Url_Image_Host = 'https://www.bing.com'
         $Const_Url_Feed_Source = 'https://www.bing.com/HPImageArchive.aspx?format=js&pid=hp'
@@ -98,8 +101,6 @@ function Get-BingImageOfTheDay {
             }
         }
 
-        # Max item count: the number of images we'll query for
-        # [int]$maxItemCount = [System.Math]::max(1, [System.Math]::max($Count, 8))
         # URI to fetch the image locations from
         if ($Locale -eq 'auto') {
             $market = ''
@@ -110,55 +111,20 @@ function Get-BingImageOfTheDay {
 
         # Get the appropiate screen resolution, using OS specific probing
         if ($Resolution -eq 'auto') {
-            if ($PSVersionTable.OS.Contains('Windows')) {
-                Write-Verbose 'On Windows'
-                Add-Type -AssemblyName System.Windows.Forms
-                $primaryScreen = [System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.Primary -eq 'True' }
-                $width = $primaryScreen.Bounds.Width
-                $height = $primaryScreen.Bounds.Height
-            }
-            elseif ($PSVersionTable.OS.Contains('macOS') -or $PSVersionTable.OS.Contains('Darwin')) {
-                Write-Verbose 'On MacOS'
-                $null = system_profiler SPDisplaysDataType -json | ConvertFrom-Json -OutVariable displayInfo
-                foreach ($display in $displayInfo[0].SPDisplaysDataType[0].spdisplays_ndrvs[0]) {
-                    if ($display.spdisplays_main -eq 'spdisplays_yes') {
-                        [int]$width = $display._spdisplays_pixels.split('x')[0].Trim()
-                        [int]$height = $display._spdisplays_pixels.split('x')[1].Trim()
-                    }
-                }
-            }
-            else {
-                # Default for Linux HD
-                $width = 1920
-                $height = 1080
-            }
-
-            # Determine the resolution to download based on width and height
-            if ($width -le 1024) {
-                $Resolution = '1024x768'
-            }
-            elseif ($width -le 1280) {
-                $Resolution = '1280x720'
-            }
-            elseif ($width -le 1366) {
-                $Resolution = '1366x768'
-            }
-            elseif ($height -le 1080) {
-                $Resolution = '1920x1080'
-            }
-            elseif ($width -le 1920) {
-                $Resolution = '1920x1080'
-            }
-            else {
-                $Resolution = 'UHD'
-            }
+                $Resolution = Get-Resolution
         }
-        Write-Verbose "Resolution: $resolution"
+        Write-Verbose "Resolution: $Resolution"
 
         # $items = New-Object System.Collections.ArrayList
-        if ($FromAlternateSource) {
+        if ($UseAlternateSource) {
             # Uses a JSON format, all items returned. No "desc" field.
-            $jsonImgs = ConvertFrom-Json -InputObject $(Invoke-WebRequest -UseBasicParsing -Uri $Const_Url_Feed_AltSource).Content
+            [System.Collections.ArrayList]$jsonImgs = [System.Collections.ArrayList]::new()
+            try {
+                $jsonImgs += ConvertFrom-Json -InputObject $(Invoke-WebRequest -UseBasicParsing -Uri $Const_Url_Feed_AltSource).Content
+            }
+            catch {
+                Write-Error "Error: Alt Metadata URL failed: $Const_Url_Feed_AltSource"
+            }
         }
         else {
             # Using the JSON Format, which puts images in an images array.
@@ -182,8 +148,13 @@ function Get-BingImageOfTheDay {
                 if ($pages -eq $i) { $pageItems = $pageAndRemainder.Item2 } else { $pageItems = $pageSize }
                 [string]$pageUri = "$Const_Url_Feed_Source$market&idx=$($i * $pageSize)&n=$pageItems"
                 Write-Verbose "Fetching Page $($i + 1)"
-                $request = Invoke-WebRequest -Uri $pageUri -DisableKeepAlive -UserAgent 'parp-1.0' -UseBasicParsing
-                $jsonImgs += $(ConvertFrom-Json -InputObject $request.Content).Images
+                try {
+                    $request = Invoke-WebRequest -Uri $pageUri -DisableKeepAlive -UserAgent 'parp-1.0' -UseBasicParsing
+                    $jsonImgs += $(ConvertFrom-Json -InputObject $request.Content).Images
+                }
+                catch {
+                    Write-Error "Error: Web request to $pageUri failed."
+                }
             }
         }
 
@@ -194,35 +165,37 @@ function Get-BingImageOfTheDay {
             Add-Member -Type NoteProperty -Name imagedate -Value $imageDate -InputObject $item -Force
             Add-Member -Type NoteProperty -Name imageurl -Value $imageUrl -InputObject $item -Force
         }
+        if ($jsonImgs.Count -gt 0) {
 
-        # Download items
-        $jsonImgs = $($jsonImgs | Sort-Object -Property startdate -Unique -Descending)
-        Write-Verbose "Most recent $Count images to check from $($jsonImgs.length)"
-        $i = 0
-        $client = New-Object System.Net.WebClient
-        foreach ($item in $jsonImgs) {
+            # Download items
+            $jsonImgs = $($jsonImgs | Sort-Object -Property startdate -Unique -Descending)
+            Write-Verbose "Most recent $Count images to check from $($jsonImgs.length)"
+            $i = 0
+            $client = New-Object System.Net.WebClient
+            foreach ($item in $jsonImgs) {
                 
-            $destination = Join-Path $Path "$($item.imagedate).jpg"
-            $destinationWithMetadata = Join-Path $Path $($item.imagedate + "_meta.jpg")
+                $destination = Join-Path $Path "$($item.imagedate).jpg"
+                $destinationWithMetadata = Join-Path $Path $($item.imagedate + "_meta.jpg")
                 
-            # Download the enclosure if we haven't done so already
-            if (!(Test-Path $destination) -and !(Test-Path $destinationWithMetadata)) {
-                Write-Verbose $('image: ' + $item.startdate + ' -- ' + $item.title)
-                Write-Verbose "Test-Path $destination $(Test-Path $destination)"
-                Write-Verbose "Test-Path $destinationWithMetadata $(Test-Path $destinationWithMetadata)"
-                if ($WhatIfPreference -eq $true) {
-                    Write-Output "WhatIf: Downloading image from: $($item.imageurl) to: $destination"
+                # Download the enclosure if we haven't done so already
+                if (!(Test-Path $destination) -and !(Test-Path $destinationWithMetadata)) {
+                    Write-Verbose $('image: ' + $item.startdate + ' -- ' + $item.title)
+                    Write-Verbose "Test-Path $destination $(Test-Path $destination)"
+                    Write-Verbose "Test-Path $destinationWithMetadata $(Test-Path $destinationWithMetadata)"
+                    if ($WhatIfPreference -eq $true) {
+                        Write-Output "WhatIf: Downloading image from: $($item.imageurl) to: $destination"
+                    }
+                    else {
+                        Write-Verbose "Downloading image from: $($item.imageurl) to: $destination"
+                        $client.DownloadFile($item.imageurl, $destination)
+                    }
                 }
-                else {
-                    Write-Verbose "Downloading image from: $($item.imageurl) to: $destination"
-                    $client.DownloadFile($item.imageurl, $destination)
-                }
+                $i++
+                if ($i -eq $Count) { break }
+                
             }
-            $i++
-            if ($i -eq $Count) { break }
-            
         }
-        
+            
         # Delete switch logic
         if ($Delete -and ($Count -gt 0)) {
             # We do not want to keep every file; remove the old ones
@@ -243,6 +216,5 @@ function Get-BingImageOfTheDay {
                 $i++
             }
         }
-
     }
 }
