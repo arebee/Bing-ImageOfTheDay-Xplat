@@ -62,6 +62,8 @@ function Update-BingImageOfTheDayMetadata {
             '1920x1080', '1920x1200', '720x1280', '768x1024', '768x1280',
             '768x1366', '1080x1920', 'UHD'
         )][string]$Resolution = 'auto',
+
+        [switch]$UseAlternateSource,
     
         [string]$Path = $(Join-Path $([Environment]::GetFolderPath("MyPictures")) "Wallpapers")
     )
