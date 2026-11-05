@@ -236,7 +236,7 @@ function Update-BingImageOfTheDayMetadata {
             -Subject="$caption" `
             -iptc:ObjectName="$title" `
             -iptc:Caption-Abstract="$caption" `
-            -xmp:dc:source="$($imageMetadata.url)" `
+            -XMP:source="$($imageMetadata.url)" `
             -Copyright="$copyright" `
             -CreatorWorkURL="$($imageMetadata.copyrightlink)" `
             -BaseURL="$($imageMetadata.url)" `
