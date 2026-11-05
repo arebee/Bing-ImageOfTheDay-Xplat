@@ -9,8 +9,9 @@ mainly to add MacOS support. Thanks for the project [Tim!](https://github.com/ti
 platforms. While I haven't tested on Linux, it has worked on one
 user's machine. :-)
 1. Can use an alternate (unofficial) source of image metadata by
-specifying `-FromAlternateSource` on the command line. The official Bing
-endpoint supports the last 15 days, the unofficial endpoint has over 1000 entries.
+specifying `-UseAlternateSource` on the command line. The official Bing
+endpoint supports the last 15 days, the unofficial endpoint has over 1000 entries,
+if it is working/available.
 1. A script (`update-imagemetadata.ps1`) that uses [ExifTool](https://exiftool.org/)
 to update the image metadata in the source files to reflect the
 metadata in the feed. The downloaded images don't include them, strangely.
